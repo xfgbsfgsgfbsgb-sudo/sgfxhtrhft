@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D BlockWorld: Аккаунт и Камера</title>
+    <title>2D BlockWorld: Камера и Полное Меню</title>
     <style>
         body {
             margin: 0;
@@ -44,10 +44,6 @@
             gap: 20px;
             pointer-events: auto;
         }
-        .ui-screen h2 {
-            margin-top: 0;
-            color: #f39c12;
-        }
         .ui-screen button {
             padding: 10px 20px;
             font-size: 20px;
@@ -62,11 +58,11 @@
             background-color: #27ae60;
         }
 
-        /* Стиль для главного меню игрока (Пауза) */
-        #player-menu-screen button {
+        /* Стиль для главного меню */
+        #main-menu-screen button {
             background-color: #3498db; 
         }
-        #player-menu-screen button:hover {
+        #main-menu-screen button:hover {
             background-color: #2980b9; 
         }
 
@@ -95,6 +91,9 @@
             pointer-events: none;
             border: 2px solid #f1c40f;
         }
+        #money-gui span {
+            font-weight: bold;
+        }
 
         /* Игровой HUD (Кнопка меню) */
         #game-hud {
@@ -120,25 +119,32 @@
 
     <div id="ui-container">
         
+        <div id="main-menu-screen" class="ui-screen">
+            <h1>2D BLOCK WORLD</h1>
+            <p>Добро пожаловать!</p>
+            <button id="btn-create-account">Создать Аккаунт и Играть</button>
+            <button onclick="world.endGame()">Выйти из Игры (Закрыть)</button>
+        </div>
+        
         <div id="account-screen" class="ui-screen">
-            <h2>СОЗДАТЬ АККАУНТ</h2>
+            <h2>Создать Аккаунт и Персонажа</h2>
             <div style="text-align: left;">
                 <label for="reg-name">Имя (Никнейм):</label>
-                <input type="text" id="reg-name" value="Игрок_R6">
+                <input type="text" id="reg-name" value="CameraMaster">
                 
                 <label style="margin-top: 10px; display: block;">Цвет Тела (Торс):</label>
                 <input type="color" id="reg-color-body" value="#3498db">
             </div>
-            <button id="btn-start-game">ИГРАТЬ</button>
+            <button id="btn-start-game">Играть!</button>
         </div>
 
-        <div id="player-menu-screen" class="ui-screen">
-            <h2>МЕНЮ ИГРОКА</h2>
-            <p>Аккаунт: <span id="menu-player-name"></span></p>
+        <div id="ingame-menu-screen" class="ui-screen">
+            <h2>Меню Паузы</h2>
+            <p>Текущий игрок: <span id="menu-player-name"></span></p>
             <button onclick="world.unpauseGame()">Продолжить Игру</button>
             <button id="btn-add-friend">Добавить Друга (Имитация)</button>
-            <button onclick="world.logOut()" style="background-color: #e67e22;">Выйти из Аккаунта</button>
-            <button onclick="world.endGame()" style="background-color: #c0392b;">Выйти из Игры (Закрыть)</button>
+            <button onclick="world.goToMainMenu()" style="background-color: #e67e22;">Выйти в Главное Меню</button>
+            <button onclick="world.endGame()" style="background-color: #c0392b;">Выйти из Игры</button>
         </div>
         
     </div>
@@ -156,8 +162,9 @@
         const ctx = canvas.getContext('2d');
         
         // UI Elements
+        const mainMenuScreen = document.getElementById('main-menu-screen');
         const accountScreen = document.getElementById('account-screen');
-        const playerMenuScreen = document.getElementById('player-menu-screen');
+        const ingameMenuScreen = document.getElementById('ingame-menu-screen');
         const gameHUD = document.getElementById('game-hud');
         const moneyGUI = document.getElementById('money-gui');
         
@@ -168,14 +175,16 @@
         const GRAVITY = 0.5;
         const JUMP_POWER = -10;
         const CHEST_REWARD = 50;
-        const CAMERA_Y_OFFSET = GAME_HEIGHT / 2; 
+        const CAMERA_Y_OFFSET = GAME_HEIGHT / 2; // Центр экрана
 
-        let gameState = 'ACCOUNT'; // ACCOUNT, GAME, PAUSED
+        let gameState = 'MAIN_MENU'; // MAIN_MENU, ACCOUNT, GAME, PAUSED
         let blocks = {};
-        let cameraY = 0; 
+        
+        // --- Переменные Камеры ---
+        let cameraY = 0; // Смещение камеры по вертикали
 
         let playerData = {
-            name: 'Игрок_R6',
+            name: 'R6_Player',
             money: 0,
             colors: {
                 head: '#f1c40f',
@@ -188,7 +197,7 @@
         let chestKey = ''; 
 
 
-        // --- Класс Аватара (R6) ---
+        // --- Класс Аватара ---
         class Avatar {
             constructor(x, y, data) {
                 this.x = x;
@@ -205,6 +214,7 @@
                 this.money = data.money;
                 this.colors = data.colors;
                 
+                // Для анимации (угол R6)
                 this.animator = 0;
                 this.animSpeed = 0.2; 
                 this.maxAngle = 0.6; 
@@ -222,9 +232,11 @@
             }
 
             draw(ctx) {
+                // ПРИМЕНЯЕМ СМЕЩЕНИЕ КАМЕРЫ КО ВСЕМУ РИСОВАНИЮ
                 ctx.save();
                 ctx.translate(0, cameraY); 
                 
+                // Расчет угла качания R6
                 let angle = 0;
                 if (this.isGrounded && (world.keys['a'] || world.keys['d'])) {
                      this.animator += this.animSpeed;
@@ -233,8 +245,8 @@
                     this.animator = 0;
                 }
 
+                // Координата Y для торса (baseY)
                 const baseY = this.y; 
-                const limbColor = this.colors.limbs;
                 
                 // 1. Имя
                 ctx.fillStyle = 'white';
@@ -248,6 +260,8 @@
                 // 3. Торс (Torso)
                 this.drawBlock(this.x, baseY, this.width, this.height, this.colors.body);
                 
+                const limbColor = this.colors.limbs;
+
                 // 4. Правая рука (Right Arm) - Противофаза
                 ctx.save();
                 ctx.translate(this.x + this.width, baseY); 
@@ -281,7 +295,7 @@
                 ctx.fillRect(this.x + 5, baseY - TILE_SIZE + 10, 5, 5);
                 ctx.fillRect(this.x + this.width - 10, baseY - TILE_SIZE + 10, 5, 5);
                 
-                ctx.restore(); 
+                ctx.restore(); // ВОССТАНАВЛИВАЕМ КОНТЕКСТ (СНИМАЕМ СМЕЩЕНИЕ КАМЕРЫ)
             }
 
             update(keys, blocks) {
@@ -290,7 +304,7 @@
             }
             
             checkBounds() {
-                 if (this.x - this.limbWidth < 0) this.x = this.limbWidth; 
+                 if (this.x - this.limbWidth < 0) this.x = this.limbWidth;
                  if (this.x + this.width + this.limbWidth > GAME_WIDTH) this.x = GAME_WIDTH - this.width - this.limbWidth;
             }
 
@@ -307,6 +321,7 @@
             }
             
             applyGravity(blocks) {
+                const oldY = this.y;
                 this.vy += GRAVITY;
                 this.y += this.vy;
                 this.isGrounded = false;
@@ -344,10 +359,12 @@
                             return;
                         } 
                         else if (this.vy < 0 && playerRect.y + TILE_SIZE <= blockRect.y + blockRect.height && playerRect.y + TILE_SIZE > blockRect.y + blockRect.height / 2) {
-                            this.y = blockRect.y + TILE_SIZE + TILE_SIZE + 1; 
+                            // Столкновение головой снизу
+                            this.y = blockRect.y + TILE_SIZE + TILE_SIZE + 1; // Смещение вниз
                             this.vy = 0;
                             return;
                         }
+                        // Боковая коллизия (оставлена упрощенной)
                         else {
                            if (playerRect.y + playerRect.height > blockRect.y + 5 && playerRect.y < blockRect.y + blockRect.height - 5) {
                                 if (world.keys['d'] && playerRect.x + playerRect.width > blockRect.x && playerRect.x < blockRect.x) {
@@ -382,31 +399,37 @@
                 this.keys = {};
                 this.setupInitialBlocks();
                 this.setupEventListeners();
-                this.loadAccountScreen(); // СТАРТОВЫЙ ЭКРАН - АККАУНТ
+                this.loadMainMenu();
                 this.gameLoop();
             }
             
             setupInitialBlocks() {
                 blocks = {}; 
+
                 // 1. Пол
                 for (let x = 0; x < GAME_WIDTH / TILE_SIZE; x++) {
                     blocks[`${x * TILE_SIZE},${GAME_HEIGHT - TILE_SIZE}`] = '#27ae60';
                 }
                 
-                // 2. Паркур-Башня
+                // 2. Нормальный Паркур-Башня
                 const BASE_X = 50;
                 let y = GAME_HEIGHT - TILE_SIZE * 2;
+                
                 for (let i = 0; i < 15; i++) {
                     let x = BASE_X + (i % 2 === 0 ? 0 : 60); 
                     y -= TILE_SIZE * 1.5; 
+                    
                     blocks[`${x},${y}`] = '#95a5a6'; 
                     blocks[`${x + TILE_SIZE},${y}`] = '#95a5a6';
                 }
                 
-                // 3. Сундук
+                // 3. Сундук на вершине
                 chestKey = `${BASE_X + 60},${y - TILE_SIZE}`; 
                 blocks[chestKey] = CHEST_BLOCK_COLOR;
+                
                 blocks[`${BASE_X + 60},${GAME_HEIGHT - TILE_SIZE * 2}`] = '#95a5a6';
+                
+                // Добавляем потолок, чтобы камера могла подняться выше
                 blocks[`${0},${-200}`] = '#34495e';
             }
 
@@ -425,12 +448,19 @@
                     }
                 });
                 
+                document.getElementById('btn-create-account').addEventListener('click', () => this.loadAccountScreen());
                 document.getElementById('btn-start-game').addEventListener('click', () => this.saveAndStartGame());
                 document.getElementById('btn-pause').addEventListener('click', () => this.pauseGame());
                 document.getElementById('btn-add-friend').addEventListener('click', () => this.addFriend());
             }
             
             // --- УПРАВЛЕНИЕ МЕНЮ ---
+
+            loadMainMenu() {
+                gameState = 'MAIN_MENU';
+                this.hideAllScreens();
+                mainMenuScreen.style.display = 'flex';
+            }
 
             loadAccountScreen() {
                 gameState = 'ACCOUNT';
@@ -443,7 +473,7 @@
                     gameState = 'PAUSED';
                     this.hideAllScreens();
                     document.getElementById('menu-player-name').textContent = playerData.name;
-                    playerMenuScreen.style.display = 'flex';
+                    ingameMenuScreen.style.display = 'flex';
                 }
             }
             
@@ -452,20 +482,14 @@
                 this.hideAllScreens();
             }
 
-            // Новый пункт меню: Выйти из Аккаунта
-            logOut() {
-                this.loadAccountScreen(); // Перебрасываем на экран создания аккаунта
+            goToMainMenu() {
+                this.loadMainMenu();
                 this.keys = {};
-                // Сбрасываем позицию игрока и монеты при выходе из аккаунта
-                playerData.money = 0;
-                this.updateMoneyGUI();
                 this.player.x = GAME_WIDTH / 2;
                 this.player.y = GAME_HEIGHT - this.player.getTotalHeight() + TILE_SIZE;
             }
 
-
             saveAndStartGame() {
-                // Берем данные с экрана аккаунта
                 playerData.name = document.getElementById('reg-name').value || 'Игрок';
                 playerData.colors.body = document.getElementById('reg-color-body').value;
                 this.startGame();
@@ -489,13 +513,15 @@
             
             endGame() {
                 alert("Спасибо за игру! Окно будет закрыто.");
-                // Имитация закрытия, возвращаемся на стартовый экран
-                this.logOut(); 
+                // В реальной жизни: window.close();
+                // Для браузеров: Просто сбрасываем в главное меню
+                this.goToMainMenu(); 
             }
 
             hideAllScreens() {
+                mainMenuScreen.style.display = 'none';
                 accountScreen.style.display = 'none';
-                playerMenuScreen.style.display = 'none';
+                ingameMenuScreen.style.display = 'none';
                 gameHUD.style.display = 'none';
                 moneyGUI.style.display = 'none';
             }
@@ -526,7 +552,7 @@
                         playerData.money += CHEST_REWARD; 
                         this.updateMoneyGUI();
                         
-                        alert(`💰 ${playerData.name}, вы получили ${CHEST_REWARD} монет! Башня перестроилась.`);
+                        alert(`💰 Поздравляем, ${playerData.name}! Вы забрались на башню и получили ${CHEST_REWARD} монет! Башня перестроилась.`);
                         
                         this.setupInitialBlocks(); 
                     }
@@ -539,12 +565,17 @@
             
             // --- КАМЕРА ---
             updateCamera() {
+                // Желаемая позиция камеры: держать игрока в центре (GAME_HEIGHT / 2)
                 const desiredY = this.player.y - CAMERA_Y_OFFSET + this.player.getTotalHeight() / 2;
+                
+                // Плавное следование камеры (Lerp)
                 const smoothing = 0.05; 
                 cameraY += (desiredY - cameraY) * smoothing;
                 
+                // Инвертируем Y для отрисовки: чем выше игрок, тем ниже смещается мир
                 cameraY *= -1;
                 
+                // Ограничиваем камеру, чтобы не показывать пустоту ниже пола
                 const maxY = 0;
                 if (cameraY > maxY) {
                     cameraY = maxY;
@@ -564,13 +595,15 @@
             draw() {
                 ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
                 
-                // РИСУЕМ БЛОКИ
+                // РИСУЕМ БЛОКИ (К ним применяется смещение камеры через drawPlayer)
                 for (const key in blocks) {
                     const [x, y] = key.split(',').map(Number);
                     
+                    // Блоки должны быть нарисованы с учетом смещения камеры
                     ctx.save();
                     ctx.translate(0, cameraY);
                     
+                    // Рисуем сам блок
                     ctx.fillStyle = blocks[key];
                     ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
                     ctx.strokeStyle = '#2c3e50';
